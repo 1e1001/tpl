@@ -1,0 +1,1 @@
+("8.8" tarm64le ("31c9949e0b4e608ace727e8b67a560f5a00c1435" . "3c115cedf6a2b63800132795c5eadfbdcf1e54ab") (collects #"info" #"main.rkt") (collects #"setup" #"infotab.rkt"))

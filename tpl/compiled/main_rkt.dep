@@ -1,0 +1,1 @@
+("8.8" tarm64le ("8e387e68c15112b7e9a17fecd9332fd6d128f471" . "d56f207c1b8ab3c6c3eb01938c35cfddb3149aed") (collects #"racket" #"base.rkt") (collects #"racket" #"runtime-config.rkt"))
