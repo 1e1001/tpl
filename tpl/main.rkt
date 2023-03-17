@@ -22,7 +22,11 @@
          tpl-output
          tpl-run
          tpl-run*
+         #%tpl-lift
          output/file)
+
+{define-syntax-rule (#%tpl-lift . body)
+  {begin . body}}
 
 ; {define-syntax-rule (-module-begin . body)
 ;   {#%module-begin
@@ -34,27 +38,37 @@
 ; ideally it should push all the module-level forms to not count as a result item
 {define-syntax (-module-begin stx)
   {parameterize ([current-namespace (make-base-namespace)])
-    (define exprs (cdr (syntax-e (expand #`(begin . #,(syntax-e (cdr (syntax-e stx))))))))
+    (define exprs (syntax-e (cdr (syntax-e stx))))
     (define push-len 0)
     (define res
       {for/list ([expr exprs])
         (if {let/cc brk
-              {unless (list? expr)
+              (define expanded (syntax-e (expand expr)))
+              (writeln expanded)
+              {unless (pair? expanded)
                 (brk #f)}
-              (define name (car expr))
-              (or (free-identifier=? name #'#%expression)
-                  (free-identifier=? name #'#%provide)
-                  (free-identifier=? name #'#%declare)
-                  (free-identifier=? name #'module)
-                  (free-identifier=? name #'module*)
-                  (free-identifier=? name #'module+)
-                  (free-identifier=? name #'define-values)
-                  (free-identifier=? name #'define-syntaxes)
-                  (free-identifier=? name #'#%require))}
+              (define name (syntax-e (car expanded)))
+              (or (eq? name '#%expression)
+                  (eq? name '#%provide)
+                  (eq? name '#%declare)
+                  (eq? name 'module)
+                  (eq? name 'module*)
+                  (eq? name 'module+)
+                  (eq? name 'define-values)
+                  (eq? name 'define-syntaxes)
+                  (eq? name '#%require)
+                  (and (eq? name '#%app)
+                       (syntax? (cdr expanded))
+                       {let ([in (syntax-e (cdr expanded))])
+                         (and (pair? in)
+                              (pair? (car in))
+                              (eq? (caar in) '#%top)
+                              (eq? (cdar in) '#%tpl-lift))}))}
             expr
             {begin0
               #`(vector-set! res #,push-len #,expr)
               (set! push-len (add1 push-len))})})
+    (writeln res)
     #`{#%module-begin
        (define #%tpl-script-out #f)
        (provide #%tpl-script-out)
