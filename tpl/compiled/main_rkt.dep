@@ -1,1 +1,1 @@
-("8.8" tarm64le ("8e387e68c15112b7e9a17fecd9332fd6d128f471" . "d56f207c1b8ab3c6c3eb01938c35cfddb3149aed") (collects #"racket" #"base.rkt") (collects #"racket" #"runtime-config.rkt"))
+("8.8" ta6le ("2853f8a629eb0b802a403dc354beacb09c65304e" . "4fa3f56a013625749105e1a66ac16db328e971d4") (collects #"racket" #"base.rkt") (collects #"racket" #"file.rkt") (collects #"racket" #"format.rkt") (collects #"racket" #"path.rkt") (collects #"racket" #"runtime-config.rkt") (collects #"racket" #"string.rkt") (collects #"scribble" #"reader.rkt") (collects #"syntax" #"module-reader.rkt"))
