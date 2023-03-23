@@ -1,5 +1,8 @@
 #lang tpl
 @require[racket/format]
+@require["conftest.rkt"]
 @tpl-output[displayln]
 this is a test tpl file
-@tpl-run["."]
+@~when[(equal? hello "World")]{
+  Hello, World!
+}

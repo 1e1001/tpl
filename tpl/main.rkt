@@ -19,32 +19,25 @@
          (rename-out
           [-module-begin #%module-begin]
           [tpl-doc ~*])
-         tpl-file
-         tpl-output
-         tpl-run
-         tpl-run*
-         #%tpl-lift
-         output/file
-         ~when
-         ~unless
-         ~)
+         define+provide)
+{define-syntax define+provide
+  (syntax-rules ()
+    [(_ (name . args) . body)
+     (define+provide name (λ args . body))]
+    [(_ name value)
+     {begin
+       (provide name)
+       (define name value)}])}
 
 (struct tpl-doc (v) #:transparent)
 
-{define (~ . args)
+{define+provide (~ . args)
   (tpl-doc args)}
 
+(provide #%tpl-lift)
 {define-syntax-rule (#%tpl-lift . body)
   {begin . body}}
 
-; {define-syntax-rule (-module-begin . body)
-;   {#%module-begin
-;     (define #%tpl-script-out #f)
-;     (provide #%tpl-script-out)
-;     (set! #%tpl-script-out (tpl-file . body))}}
-
-; TODO: figure out this shit
-; ideally it should push all the module-level forms to not count as a result item
 {define-syntax (-module-begin stx)
   {parameterize ([current-namespace (make-base-namespace)])
     (define exprs (syntax-e (cdr (syntax-e stx))))
@@ -94,11 +87,12 @@
 (define output-func (make-parameter #f))
 
 ; parameter wrapper that takes multiple args
-{define (tpl-output . args)
+{define+provide (tpl-output . args)
   (if (eq? args null)
       (output-func)
       (output-func args))}
 
+(provide tpl-file)
 {define-syntax-rule (tpl-file . body)
   {parameterize ([output-func #f])
     (define res (stringify (~ . body)))
@@ -107,13 +101,13 @@
       (error "tpl-file call did not specify an output")}
     (apply (car out) res (cdr out))}}
 
-{define (output/file res path)
+{define+provide (output/file res path)
   (call-with-output-file
    path #:exists 'truncate/replace
    {λ (port)
      (display res port)})}
 
-{define (tpl-run path)
+{define+provide (tpl-run path)
   {define (collect-paths path)
     (case (file-or-directory-type path)
       [(file link)
@@ -140,11 +134,13 @@
                                         {λ () #f}))])}
   (inner-run (collect-paths path))}
 
-{define (tpl-run* . paths)
+{define+provide (tpl-run* . paths)
   (map tpl-run paths)}
 
+(provide ~when)
 {define-syntax-rule (~when cond . args)
-  (if cond (list . args) null)}
-{define-syntax-rule (~unless cond . args)
- (if cond null (list . args))}
+  {when cond (~ . args)}}
 
+(provide ~unless)
+{define-syntax-rule (~unless cond . args)
+ {unless cond (~ . args)}}
