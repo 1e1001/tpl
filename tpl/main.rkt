@@ -1,25 +1,40 @@
 #lang racket/base
 
+; this is functionally equivalent to doing
+;   #lang at-exp <lang>
+;   (require tpl)
+;   ...
+; but cooler (allows lang-detection in tpl-run)
 (module reader syntax/module-reader
-  tpl
-  #:read scribble:read-inside
-  #:read-syntax scribble:read-syntax-inside
-  #:whole-body-readers? #t
-  (require (prefix-in scribble: scribble/reader)))
+  #:language read
+  #:wrapper2 {λ (in rd stx?)
+               {parameterize ([current-readtable
+                               (make-at-readtable)])
+                 (define mod (rd in))
+                 (define mod-e (syntax-e mod))
+                 (define beg (cadddr mod-e))
+                 (define beg-e (syntax-e beg))
+                 (datum->syntax
+                  mod
+                  (list (car mod-e)
+                        (cadr mod-e)
+                        (caddr mod-e)
+                        (datum->syntax
+                         beg
+                         (list* (car beg-e)
+                                ; #'(require tpl) would be more correct here,
+                                ; but that results in an ambiguous identifier or something
+                                (datum->syntax beg '(require tpl))
+                                (cdr beg-e))
+                         beg))
+                  mod)}}
+  (require scribble/reader))
 
-(require racket/file
-         racket/format
-         racket/path
-         racket/string
-         (for-syntax
-          racket/base))
-(provide (except-out
-          (all-from-out racket/base)
-          #%module-begin)
-         (rename-out
-          [-module-begin #%module-begin]
-          [tpl-doc ~*])
-         define+provide)
+(require racket/format
+         racket/path)
+
+; define & provide in the same expression
+(provide define+provide)
 {define-syntax define+provide
   (syntax-rules ()
     [(_ (name . args) . body)
@@ -28,53 +43,20 @@
      {begin
        (provide name)
        (define name value)}])}
+(provide define+provide-syntax-rule)
+{define-syntax-rule (define+provide-syntax-rule (name . args) body)
+  {begin
+    (provide name)
+    (define-syntax-rule (name . args) body)}}
 
+; document type
+(provide (struct-out tpl-doc))
 (struct tpl-doc (v) #:transparent)
-
-{define+provide (~ . args)
+{define+provide (: . args)
   (tpl-doc args)}
 
-(provide #%tpl-lift)
-{define-syntax-rule (#%tpl-lift . body)
-  {begin . body}}
-
-{define-syntax (-module-begin stx)
-  {parameterize ([current-namespace (make-base-namespace)])
-    (define exprs (syntax-e (cdr (syntax-e stx))))
-    (define body-exprs null)
-    (define item-exprs null)
-    {for/list ([expr exprs])
-      (if {let/cc brk
-            (define expanded (syntax-e (expand expr)))
-            {unless (pair? expanded)
-              (brk #f)}
-            (define name (syntax-e (car expanded)))
-            (or (eq? name '#%expression)
-                (eq? name '#%provide)
-                (eq? name '#%declare)
-                (eq? name 'module)
-                (eq? name 'module*)
-                (eq? name 'module+)
-                (eq? name 'define-values)
-                (eq? name 'define-syntaxes)
-                (eq? name '#%require)
-                (and (eq? name '#%app)
-                     (syntax? (cdr expanded))
-                     {let ([in (syntax-e (cdr expanded))])
-                       (and (pair? in)
-                            (pair? (car in))
-                            (eq? (caar in) '#%top)
-                            (eq? (cdar in) '#%tpl-lift))}))}
-          (set! body-exprs (cons expr body-exprs))
-          (set! item-exprs (cons expr item-exprs)))}
-    #`{#%module-begin
-       (define #%tpl-script-out #f)
-       (provide #%tpl-script-out)
-       #,@(reverse body-exprs)
-       (set! #%tpl-script-out (tpl-file . #,(reverse item-exprs)))}}}
-
 ; convert an @-exp list into a string
-{define (stringify item)
+{define+provide (stringify item)
   (cond
     [(string? item) item]
     [(void? item) ""]
@@ -84,63 +66,61 @@
               (stringify i)})]
     [else (~s item)])}
 
-(define output-func (make-parameter #f))
+; "@:" expressions are like the normal ones but specifically for tpl-doc's
+{define+provide-syntax-rule (define/@:expr name fn args ...)
+  {define-syntax-rule (name args ... . body)
+    (fn args ... (: . body))}}
+{define+provide-syntax-rule (define+provide/@:expr name fn args ...)
+  {begin
+    (provide name)
+    (define/@:expr name fn args ...)}}
+; some useful ones from racket/base
+(define+provide/@:expr :when when cond)
+(define+provide/@:expr :unless unless cond)
+(define+provide/@:expr :parameterize parameterize vars)
 
-; parameter wrapper that takes multiple args
-{define+provide (tpl-output . args)
-  (if (eq? args null)
-      (output-func)
-      (output-func args))}
-
-(provide tpl-file)
-{define-syntax-rule (tpl-file . body)
-  {parameterize ([output-func #f])
-    (define res (stringify (~ . body)))
-    (define out (output-func))
-    {unless out
-      (error "tpl-file call did not specify an output")}
-    (apply (car out) res (cdr out))}}
-
-{define+provide (output/file res path)
+; different types of output
+; in the format of ((output/whatever . args) body) or (output/whatever body)
+{define+provide-syntax-rule (output/module body)
+  (define+provide #%tpl-output/module body)}
+{define+provide ((output/file path) body)
   (call-with-output-file
    path #:exists 'truncate/replace
    {λ (port)
-     (display res port)})}
+     (display (stringify body) port)})}
+{define+provide ((output/call fn . args) body)
+  (apply fn (stringify body) args)}
 
+; defines a document
+{define+provide-syntax-rule (tpl out-fn . body)
+  (out-fn (: . body))}
+
+; recurse tpl scripts
 {define+provide (tpl-run path)
-  {define (collect-paths path)
-    (case (file-or-directory-type path)
-      [(file link)
-       (if (and (path-has-extension? path #".rkt")
-                (call-with-input-file
-                 path
-                 {λ (port)
-                   (define lang (read-language port {λ () #f}))
-                   (and lang (eq? (lang 'module-language #f) 'tpl))}))
-           path
-           '())]
-      [(directory directory-link)
-       (filter {λ (v)
-                 (not (null? v))}
-               (map collect-paths
-                    (directory-list path #:build? #t)))])}
-  {define (inner-run path)
+  (define paths
+    {let collect-paths ([path path])
+      (case (file-or-directory-type path)
+        [(file link)
+         (if (and (path-has-extension? path #".rkt")
+                  (call-with-input-file
+                   path
+                   {λ (port)
+                     (define lang (read-language port {λ () #f}))
+                     (and lang (eq? (lang 'module-language #f) 'tpl))}))
+             path
+             '())]
+        [(directory directory-link)
+         (filter {λ (v)
+                   (not (null? v))}
+                 (map collect-paths
+                               (directory-list path #:build? #t)))])})
+  {let inner-run ([path paths])
     (cond
       [(null? path) #f]
       [(list? path) (map inner-run path)]
-      [else (cons path (dynamic-require (make-resolved-module-path
-                                         (normalize-path path))
-                                        '#%tpl-script-out
-                                        {λ () #f}))])}
-  (inner-run (collect-paths path))}
-
+      [else (cons path (dynamic-require
+                        (make-resolved-module-path (normalize-path path))
+                        '#%tpl-output/module
+                        {λ () #f}))])}}
 {define+provide (tpl-run* . paths)
   (map tpl-run paths)}
-
-(provide ~when)
-{define-syntax-rule (~when cond . args)
-  {when cond (~ . args)}}
-
-(provide ~unless)
-{define-syntax-rule (~unless cond . args)
- {unless cond (~ . args)}}
