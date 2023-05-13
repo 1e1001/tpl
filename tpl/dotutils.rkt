@@ -9,7 +9,8 @@
     (define split (string-split i "=" #:trim? #f))
     (if (<= (length split) 1)
       (error "invalid argument" i)
-      (values (car split) (read (open-input-string (string-join (cdr split) "=")))))}}
+      (values (string->symbol (car split))
+              (read (open-input-string (string-join (cdr split) "=")))))}}
 
 {define+provide (output/if-newer path inner)
   (if (> (file-or-directory-modify-seconds (current-tpl-script))
