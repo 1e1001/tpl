@@ -4,6 +4,13 @@
          file/glob
          racket/format
          racket/string)
+{define+provide (parse-command-line-arguments [args (current-command-line-arguments)])
+  {for/hash ([i args])
+    (define split (string-split i "=" #:trim? #f))
+    (if (<= (length split) 1)
+      (error "invalid argument" i)
+      (values (car split) (read (open-input-string (string-join (cdr split) "=")))))}}
+
 {define+provide (output/if-newer path inner)
   (if (> (file-or-directory-modify-seconds (current-tpl-script))
          (file-or-directory-modify-seconds path #f {λ () 0}))
