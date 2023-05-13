@@ -40,7 +40,7 @@
 {define+provide ((output/file-as-root path) body)
   (case (system-type 'os)
     [(unix macos)
-     (printf "→ root: write file ~a\n" path)
+     (printf "→ root write file ~a\n" path)
      (inner-launch
       (find-executable-path "sudo")
       (find-executable-path "dd")
@@ -48,7 +48,7 @@
       #:stdio '(#f #t #f)
       #:during {λ (_0 _1 stdin _2)
              (display (tpl-doc->string (body)) stdin)}
-      #:after {λ (_0) (printf "← root…\n")})]
+      #:after {λ (_0) (printf "← root write file…\n")})]
     [else (error "output/file-as-root is only supported on unix, got" (system-type 'os))])}
 
 {define (resolve-command-like cmd)

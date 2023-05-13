@@ -88,10 +88,12 @@
 {define+provide-syntax-rule (output/module body)
   (define+provide #%tpl-output/module (body))}
 {define+provide ((output/file path) body)
+  (printf "→ write file ~a\n" path)
   (call-with-output-file
    path #:exists 'truncate/replace
    {λ (port)
-     (display (tpl-doc->string (body)) port)})}
+     (display (tpl-doc->string (body)) port)})
+  (printf "← write file…\n")}
 {define+provide ((output/call fn . args) body)
   (apply fn (tpl-doc->string (body)) args)}
 
