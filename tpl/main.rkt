@@ -1,7 +1,8 @@
 #lang racket/base
 ; tpl - main entry point & lang
 (require racket/format
-         racket/path)
+         racket/path
+         racket/file)
 
 ; this is functionally equivalent to doing
 ;   #lang at-exp <lang>
@@ -89,6 +90,7 @@
   (define+provide #%tpl-output/module (body))}
 {define+provide ((output/file path) body)
   (printf "→ write file ~a\n" path)
+  (make-directory* (path-only path))
   (call-with-output-file
    path #:exists 'truncate/replace
    {λ (port)
